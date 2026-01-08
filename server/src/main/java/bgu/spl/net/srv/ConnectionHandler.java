@@ -6,6 +6,7 @@
 package bgu.spl.net.srv;
 
 import java.io.Closeable;
+import java.util.Map;
 
 /**
  * The ConnectionHandler interface for Message of type T
