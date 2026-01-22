@@ -100,8 +100,18 @@ public class Database {
 	}
 
 	private LoginStatus userExistsCase(int connectionId, String username, String password) {
-		User user = userMap.get(username);
-		synchronized (user) {
+		synchronized (userMap) {
+			User user = userMap.get(username);
+			if (user == null) {
+				String sqlreq = String.format(
+					"SELECT password FROM users WHERE username='%s'",
+					escapeSql(username)
+				);
+				String result = executeSQL(sqlreq);
+				User sqlUser = new User(connectionId, username, result);
+				userMap.putIfAbsent(username, sqlUser);
+				user = sqlUser;
+			}
 			if (user.isLoggedIn()) {
 				return LoginStatus.ALREADY_LOGGED_IN;
 			} else if (!user.password.equals(password)) {
@@ -119,10 +129,17 @@ public class Database {
 		if (!userMap.containsKey(username)) {
 			synchronized (userMap) {
 				if (!userMap.containsKey(username)) {
-					User user = new User(connectionId, username, password);
-					user.login();
-					addUser(user);
-					return true;
+					String sqlCheck = String.format(
+						"SELECT COUNT(*) FROM users WHERE username='%s'",
+						escapeSql(username)
+					);
+					String result = executeSQL(sqlCheck);
+					if (Integer.parseInt(result) == 0) {
+						User user = new User(connectionId, username, password);
+						user.login();
+						addUser(user);
+						return true;
+					}
 				}
 			}
 		}
@@ -136,7 +153,7 @@ public class Database {
 			String sql = String.format(
 				"UPDATE login_history SET logout_time=datetime('now') " +
 				"WHERE username='%s' AND logout_time IS NULL " +
-				"ORDER BY login_time DESC LIMIT 1",
+				"ORDER BY login_time DESC LIMIT 1",// in case of system crash?
 				escapeSql(user.name)
 			);
 			executeSQL(sql);

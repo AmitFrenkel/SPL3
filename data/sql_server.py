@@ -11,6 +11,8 @@ the methods below.
 import socket
 import sys
 import threading
+import sqlite3
+import os
 
 
 SERVER_NAME = "STOMP_PYTHON_SQL_SERVER"  # DO NOT CHANGE!
@@ -30,15 +32,38 @@ def recv_null_terminated(sock: socket.socket) -> str:
 
 
 def init_database():
-    pass
-
+    with sqlite3.connect(DB_FILE) as db_connection:
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS users (username VARCHAR(50) PRIMARY KEY,
+                                            password VARCHAR(50) NOT NULL,
+                                            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+                        """)
+        db_cursor.execute("""
+                            CREATE TABLE IF NOT EXISTS login_history (username VARCHAR(50) REFERENCES users(username),
+                                                login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                                logout_time TIMESTAMP);
+                            """)
+        db_cursor.execute("""
+                            CREATE TABLE IF NOT EXISTS file_tracking (username VARCHAR(50) REFERENCES users(username),
+                                                    filename VARCHAR(255) NOT NULL,
+                                                    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                                    game_channel VARCHAR(50) NOT NULL);
+                            """)
+        db_connection.commit()
 
 def execute_sql_command(sql_command: str) -> str:
-    return "done"
+    with sqlite3.connect(DB_FILE) as db_connection:
+        db_cursor = db_connection.cursor()
+        db_cursor.execute(sql_command)
+        db_connection.commit()
 
 
 def execute_sql_query(sql_query: str) -> str:
-    return "done"
+    with sqlite3.connect(DB_FILE) as db_connection:
+        db_cursor = db_connection.cursor()
+        db_cursor.execute(sql_query)
+        return db_cursor.fetchall()
 
 
 def handle_client(client_socket: socket.socket, addr):
@@ -52,8 +77,13 @@ def handle_client(client_socket: socket.socket, addr):
 
             print(f"[{SERVER_NAME}] Received:")
             print(message)
-
-            client_socket.sendall(b"done\0")
+            if message.find("SELECT") != -1:
+                result = execute_sql_query(message)
+                response = "\n".join([str(row[0]) if len(row) == 1 else str(row) for row in result])
+                client_socket.sendall(response.encode("utf-8") + b"\0")
+            else:
+                execute_sql_command(message)
+                client_socket.sendall(b"done\0")
 
     except Exception as e:
         print(f"[{SERVER_NAME}] Error handling client {addr}: {e}")
@@ -101,5 +131,5 @@ if __name__ == "__main__":
             port = int(raw_port)
         except ValueError:
             print(f"Invalid port '{raw_port}', falling back to default {port}")
-
+    init_database()
     start_server(port=port)

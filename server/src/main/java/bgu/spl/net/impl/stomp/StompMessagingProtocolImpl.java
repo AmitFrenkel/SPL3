@@ -1,9 +1,12 @@
 package bgu.spl.net.impl.stomp;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import bgu.spl.net.api.StompMessagingProtocol;
+import bgu.spl.net.impl.data.Database;
+import bgu.spl.net.impl.data.LoginStatus;
 import bgu.spl.net.srv.Connections;
 
 public class StompMessagingProtocolImpl implements StompMessagingProtocol<String>{
@@ -23,21 +26,16 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
     @Override
     public void process(String message) {
-        String[] lines = buildFormat(message);
+        System.out.println("Processing message: " + message);
+        String[] parts = message.split("\n\n");
+        String[] headersHolders = buildFormat(parts[0]);
         headers.clear();
         body = null;
-        int i = 0;
-        while(!lines[i].equals("")){
-            String[] header = lines[i].split(":");
-            headers.put(header[0], header[1]);
-            i++;
+        for (String line : headersHolders) {
+            String[] keyValue = line.split(":");
+            headers.put(keyValue[0], keyValue[1]);
         }
-        i++;
-        StringBuilder temp = new StringBuilder();
-        while(lines[i] != "\0"){
-            temp.append(lines[i]);
-        }
-        body = temp.toString();
+        body = parts.length > 1 ? parts[1] : null;
         try{
             switch (command) {
                 case CONNECT:
@@ -55,7 +53,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
                 case DISCONNECT:
                     disconnectUserRequest();
             }
-            if (headers.get("receipt") != null && command != CommandEnum.DISCONNECT) {
+            if (headers.get("receipt") != null && command != CommandEnum.CONNECT) {
                 recipt(headers.get("receipt"));
             }
         }catch(Exception e){
@@ -92,20 +90,10 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
             case "MESSAGE":
                 this.command = CommandEnum.MESSAGE;
                 break;
-            // case "ERROR":
-            //     this.command = CommandEnum.ERROR;
-            //     break;
         }
         return Arrays.copyOfRange(lines, 1, lines.length);
     }
     private void connect(){
-        // if (!headers.containsKey("accept-version")) {
-        //     throw new IllegalArgumentException("no accept version");
-        // }//ygael
-        // if (headers.get("accept-version") != "1.2") {
-        //     throw new IllegalArgumentException("wrong version");
-            
-        // }
         if (!headers.containsKey("host")) {
             throw new IllegalArgumentException("no host");
         }
@@ -115,48 +103,85 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         if (!headers.containsKey("passcode")) {
             throw new IllegalArgumentException("no passcode");
         }
-        // add checks for connection to host
-        // checks if the user exist and the passcode is correct
-        // create connection
-        //connections.send(this.connectionID, msg)
+        LoginStatus lg = Database.getInstance().login(connectionID, headers.get("login"), headers.get("passcode"));
+        if (lg == LoginStatus.ALREADY_LOGGED_IN) {
+            throw new IllegalArgumentException("User already logged in");
+        }
+        else if (lg == LoginStatus.WRONG_PASSWORD) {
+            throw new IllegalArgumentException("Wrong password");
+        }
         connections.send(connectionID, Parser.buildConnectedFrame());
     }
     private void subscribe(){
         if(!headers.containsKey("destination")){
             throw new IllegalArgumentException("no destination");
         }
-        //checks if dest exist
         if (!headers.containsKey("id")) {
             throw new IllegalArgumentException("no id");
         }
         //create new sub
-        ((ConnectionsImpl)connections).subscribe(headers.get("destination"), connectionID);
+        ((ConnectionsImpl)connections).subscribe(headers.get("destination"), connectionID, headers.get("id"));
     }
     private void unsubscribe(){
         if (!headers.containsKey("id")) {
             throw new IllegalArgumentException("no id");
         }
-        ((ConnectionsImpl)connections).unsubscribe(Integer.parseInt(headers.get("id")));
+        ((ConnectionsImpl)connections).unsubscribe(connectionID+"+"+headers.get("id"));
     }
+
+
+
     private void send(){
         if(body == null){
             throw new IllegalArgumentException("no body");
         }
-        connections.send(headers.get("destination"), body);//build the foramt from SEND to MESSAGE
-        
+        if(!headers.containsKey("destination")){
+            throw new IllegalArgumentException("no destination");
+        }
+        if (!headers.containsKey("fileName")) {
+            throw new IllegalArgumentException("no fileName");
+        }
+        List<String> getSubscribers = ((ConnectionsImpl)connections).getSubscribers(headers.get("destination"));
+        if(getSubscribers == null){
+            throw new IllegalArgumentException("no such destination");
+        }
+        else{
+            Database.getInstance().trackFileUpload(body.split("\n")[0].split(":")[1], headers.get("fileName"), headers.get("destination"));
+            boolean isSubscribed = false;
+            for (String con_subID : getSubscribers) {
+                int connID = ((ConnectionsImpl)connections).getConnectionId(con_subID);
+                if (connID == connectionID) {
+                    isSubscribed = true;
+                    break;
+                }
+            }
+            if (!isSubscribed) {
+                throw new IllegalArgumentException("user not subscribed to destination");
+            }
+            for(String con_subID : getSubscribers){
+                int connectionID = ((ConnectionsImpl)connections).getConnectionId(con_subID);
+                
+                String fullMsg = Parser.buildMessageFrame(con_subID.split("\\+")[1], headers.get("destination"), body);
+                connections.send(connectionID, fullMsg);
+            }
+        }        
     }
+
+    
     private void disconnectUserRequest(){
         if (!headers.containsKey("receipt")) {
             throw new IllegalArgumentException("no receipt");
         }
-        recipt(headers.get("receipt"));
         disconnect();
     }
     private void disconnect(){
         shouldTerminate = true;
-        connections.disconnect(connectionID);
         connections.send(connectionID, Parser.buildReciptFrame(headers.get("receipt")));
+        Database.getInstance().logout(connectionID);
+        connections.disconnect(connectionID);
     }
+
+
     private void recipt(String receiptID){
         connections.send(connectionID, Parser.buildReciptFrame(receiptID));
     }
@@ -168,6 +193,11 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
             connections.send(connectionID, Parser.buildErrorFrame(message, errorMessage));
             
         }
+        disconnect();
+    }
+
+    public void report(){
+        Database.getInstance().printReport();
     }
 
 }

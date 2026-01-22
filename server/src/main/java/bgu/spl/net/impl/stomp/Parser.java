@@ -20,10 +20,10 @@ public class Parser {
 
     public static String buildErrorFrame(String receiptId, String frame, String error){
         return "ERROR\nreceipt-id:" + receiptId + "\nmessage: malformed frame received" + 
-        "The message:\n-----\n" + frame + "\n-----\n" + error + "\n";
+        "\nThe message:\n-----\n" + frame + "\n-----\n" + error + "\n";
     }
     public static String buildErrorFrame(String frame, String error){
         return "ERROR\nmessage: malformed frame received" + 
-        "The message:\n-----\n" + frame + "\n-----\n" + error + "\n";
+        "\nThe message:\n-----\n" + frame + "\n-----\n" + error + "\n";
     }
 }

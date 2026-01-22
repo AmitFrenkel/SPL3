@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <sstream>
+#include <algorithm>
 using json = nlohmann::json;
 
 Event::Event(std::string team_a_name, std::string team_b_name, std::string name, int time,
