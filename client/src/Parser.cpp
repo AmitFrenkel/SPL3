@@ -18,15 +18,6 @@
         return words;
     }
 
-    std::string Parser::createConnectFrame() {
-        user = args[2];
-       return "CONNECT\naccept-version:1.2\nhost:"+splitByChar(args[1], ':')[0]+"\nlogin:"+user+
-        "\npasscode:"+args[3]+"\n\n";
-    
-
-    }
-
-
     std::vector<std::string> Parser::createSendFrames(){
         names_and_events nae = parseEventsFile(args[1]);
         std::string destination = nae.team_a_name+"_"+nae.team_b_name+"\n";

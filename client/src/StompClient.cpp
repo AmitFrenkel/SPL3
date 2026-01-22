@@ -39,11 +39,10 @@ void StompClient::updateSummary(std::string report) {
 
 void StompClient::listenServerThreadFunc(ConnectionHandler* handler, std::atomic<bool>* connected, 
 	StompProtocol*& protocol) {
-	while (*connected)//yagel atomic boolean?
+	while (*connected)
 	{
 		std::string frame;
 		if (!handler->getFrameAscii(frame, '\0')) {
-			// std::cout << frame << std::endl;
 			*connected = false;
 			handler->close();
 			break;
@@ -53,7 +52,6 @@ void StompClient::listenServerThreadFunc(ConnectionHandler* handler, std::atomic
 			protocol->handleReceipt(frame);
 		}
 		else{
-			std::cout << "Received frame from server:\n" << frame << std::endl;//maybe delete yagel
 			if (frame.find("MESSAGE") != std::string::npos)
 			{
 				updateSummary(frame);
@@ -65,8 +63,7 @@ void StompClient::listenServerThreadFunc(ConnectionHandler* handler, std::atomic
 }
 
 bool StompClient::connectToDB(ConnectionHandler*& handler, Parser& parser, StompProtocol*& protocol) {
-	return protocol->connect(parser.getHostAndPort().first+":"+parser.getHostAndPort().second,
-	 parser.getUser(), parser.getPass());
+	return protocol->connect(parser.getHostAndPort().first, parser.getUser(), parser.getPass());
 }
 
 ConnectionHandler* StompClient::login(std::string host, int port, Parser& parser, std::thread* &listenServerThread,

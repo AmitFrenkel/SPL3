@@ -16,7 +16,6 @@ private:
     std::string user;
 public:
     void parseInput(std::string& input);
-    std::string createConnectFrame();
     std::string getCommand();
     std::pair<std::string, std::string> getHostAndPort();
     std::vector<std::string> createSendFrames();

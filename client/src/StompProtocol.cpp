@@ -3,8 +3,8 @@
 StompProtocol::StompProtocol(ConnectionHandler*& handler) : handler(handler), subscribeId(0), 
 receiptId(0), channelToId(), pendingReceipts()  {}
 
-bool StompProtocol::connect(std::string hostPort, std::string user, std::string pass) {
-    std::string frame = "CONNECT\naccept-version:1.2\nhost:" + hostPort + "\nlogin:" + user + "\npasscode:" + pass + "\n\n";
+bool StompProtocol::connect(std::string host, std::string user, std::string pass) {
+    std::string frame = "CONNECT\naccept-version:1.2\nhost:" + host + "\nlogin:" + user + "\npasscode:" + pass + "\n\n";
     return handler->sendFrameAscii(frame, '\0');
 }
 
